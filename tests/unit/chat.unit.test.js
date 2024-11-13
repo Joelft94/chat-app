@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { jest } from '@jest/globals';
+import { handleMessage } from '../../index.js';
 
 describe('Chat Application Unit Tests', () => {
     // Message validation tests TDD
@@ -16,13 +17,16 @@ describe('Chat Application Unit Tests', () => {
         };
 
         // Green
-        const handleMessage = (socket, data) => {
-            if (!data || typeof data !== 'string' || data.trim().length === 0) {
-                return false;
-            }
-            socket.emit('message', `${socket.id.substring(0, 5)} : ${data}`);
-            return true;
-        };
+        
+        // We tested and we just import from the production code
+
+        // const handleMessage = (socket, data) => {
+        //     if (!data || typeof data !== 'string' || data.trim().length === 0) {
+        //         return false;
+        //     }
+        //     socket.emit('message', `${socket.id.substring(0, 5)} : ${data}`);
+        //     return true;
+        // };
 
         // Test cases
         expect(handleMessage(mockSocket, '')).toBe(false);
