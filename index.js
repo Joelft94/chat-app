@@ -4,40 +4,47 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename) // this is to get the current directory name
+const __dirname = path.dirname(__filename)
 
 const PORT = process.env.PORT || 3500
 const app = express()
 
-app.use(express.static(path.join(__dirname, 'public'))) // bc we use modules we need to use __dirname to get the current directory name with the path.dirname method
+app.use(express.static(path.join(__dirname, 'public')))
 
 const expressServer = app.listen(PORT, () => {
     console.log(`listening on port http://localhost:${PORT}`)
 })
 
-
 const io = new Server(expressServer, {
     cors: {
-        origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5500', 'http://127.0.0.1:5500'] // this is to allow the connection from the client side, we can also use * to allow all connections
+        origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5500', 'http://127.0.0.1:5500']
     }
 })
 
-//when we use on it means we are listening for an event
+// Message handling function following TDD
+const handleMessage = (socket, data) => {
+    if (!data || typeof data !== 'string' || data.trim().length === 0) {
+        return false;
+    }
+    socket.emit('message', `${socket.id.substring(0, 5)} : ${data}`);
+    return true;
+};
 
 io.on('connection', (socket) => {
     console.log(`User ${socket.id} connected`)
 
     // Upon connection - only to user that connected
-    socket.emit('message', "Welcome to the chat")  //socket. is used to send the data to a specific user
+    socket.emit('message', "Welcome to the chat")
 
     // Upon connection - to all others
-    socket.broadcast.emit('message',`${socket.id.substring(0,5)} connected` ) //socket.broadcast. is used to send the data to all users except the user that connected
+    socket.broadcast.emit('message',`${socket.id.substring(0,5)} connected` )
 
-
-    // Listening for a message event
+    // Listening for a message event - now using handleMessage function
     socket.on('message', (data) => {
-        console.log(data)
-        io.emit('message', `${socket.id.substring(0, 5)} : ${data}`) //io. is used to send the data to all users
+        if (handleMessage(socket, data)) {
+            // If message is valid, broadcast to all users
+            io.emit('message', `${socket.id.substring(0, 5)} : ${data}`)
+        }
     })
 
     // When user dcs - to all users
@@ -50,3 +57,6 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('activity', name)
     })
 })
+
+// Export for testing
+export { handleMessage }
