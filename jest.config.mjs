@@ -1,15 +1,19 @@
 export default {
+  transform: {},
   testEnvironment: 'node',
-  transform: {
-    '^.+\\.jsx?$': 'babel-jest'
+  moduleNameMapper: {
+      '^(\\.{1,2}/.*)\\.js$': '$1',
   },
-  moduleFileExtensions: ['js', 'json', 'node'],
-  testMatch: [
-    '**/tests/**/*.test.js'
-  ],
+  testMatch: ['**/tests/**/*.test.js'],
   verbose: true,
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],
-  transformIgnorePatterns: ['node_modules/(?!(socket.io-client)/)']
+  testTimeout: 5000,
+  collectCoverageFrom: [
+      'index.js',
+      'public/app.js',
+      '!**/node_modules/**',
+      '!**/tests/**'
+  ]
 };

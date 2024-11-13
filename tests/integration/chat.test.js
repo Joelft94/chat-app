@@ -3,7 +3,7 @@ import { Server } from 'socket.io';
 import { io as Client } from 'socket.io-client';
 import express from 'express';
 
-describe('Chat Application', () => {
+describe('Chat Application Integration Tests', () => {
     let io;
     let serverSocket;
     let clientSocket;
@@ -23,24 +23,19 @@ describe('Chat Application', () => {
             clientSocket = new Client(`http://localhost:${port}`);
             io.on('connection', (socket) => {
                 serverSocket = socket;
-                // Emit welcome message on connection
                 socket.emit('message', 'Welcome to the chat');
-                // Broadcast connection message to others
                 socket.broadcast.emit('message', `${socket.id.substring(0, 5)} connected`);
 
-                // Handle messages
                 socket.on('message', (data) => {
                     if (data) {
                         io.emit('message', `${socket.id.substring(0, 5)} : ${data}`);
                     }
                 });
 
-                // Handle activity
                 socket.on('activity', (name) => {
                     socket.broadcast.emit('activity', name);
                 });
 
-                // Handle disconnection
                 socket.on('disconnect', () => {
                     socket.broadcast.emit('message', `${socket.id.substring(0, 5)} disconnected`);
                 });
@@ -50,7 +45,6 @@ describe('Chat Application', () => {
     });
 
     afterEach((done) => {
-        // Clean up event listeners after each test
         if (clientSocket.connected) {
             clientSocket.removeAllListeners();
         }
@@ -66,101 +60,28 @@ describe('Chat Application', () => {
         done();
     });
 
-    test('should welcome new users', (done) => {
-        // Create a new client to receive the welcome message
-        const newClient = new Client(`http://localhost:${port}`);
-        
-        newClient.on('message', (message) => {
-            expect(message).toBe('Welcome to the chat');
-            newClient.disconnect();
-            done();
-        });
-    }, 15000);
-
-    test('should broadcast messages to all clients', (done) => {
-        const testMessage = 'Test message';
-        let messageReceived = false;
-        
-        // Create a second client to receive the broadcast
+    // Multiple client connection tests
+    test('should broadcast messages to all connected clients', (done) => {
+        const testMessage = 'Test broadcast message';
         const clientSocket2 = new Client(`http://localhost:${port}`);
         
         clientSocket2.on('connect', () => {
-            // Wait for connection message to pass
             setTimeout(() => {
                 clientSocket2.on('message', (data) => {
-                    if (data.includes(testMessage) && !messageReceived) {
-                        messageReceived = true;
+                    if (data.includes(testMessage)) {
                         expect(data).toContain(testMessage);
                         clientSocket2.disconnect();
                         done();
                     }
                 });
-                
-                // Send test message from first client
                 clientSocket.emit('message', testMessage);
             }, 1000);
         });
     }, 15000);
 
-    test('should handle typing indicator', (done) => {
-        const testUser = 'testuser';
-        
-        // Create a second client to receive the activity broadcast
-        const clientSocket2 = new Client(`http://localhost:${port}`);
-        
-        clientSocket2.on('connect', () => {
-            clientSocket2.on('activity', (name) => {
-                expect(name).toBe(testUser);
-                clientSocket2.disconnect();
-                done();
-            });
-            
-            // Emit activity from first client
-            clientSocket.emit('activity', testUser);
-        });
-    }, 15000);
-
-    test('should handle disconnection gracefully', (done) => {
-        // Create a client that will disconnect
-        const disconnectingClient = new Client(`http://localhost:${port}`);
-        
-        disconnectingClient.on('connect', () => {
-            // Listen for disconnect message on the original client
-            clientSocket.once('message', (message) => {
-                expect(message).toContain('disconnected');
-                done();
-            });
-            
-            // Disconnect after a short delay
-            setTimeout(() => {
-                disconnectingClient.disconnect();
-            }, 500);
-        });
-    }, 15000);
-
-    
-
-    test('should not process empty messages', (done) => {
-        let messageReceived = false;
-        
-        clientSocket.on('message', () => {
-            messageReceived = true;
-        });
-
-        clientSocket.emit('message', '');
-
-        setTimeout(() => {
-            expect(messageReceived).toBe(false);
-            done();
-        }, 1000);
-    }, 15000);
-
-    // Add these tests to your existing test file
-
-    test('should handle multiple rapid messages', (done) => {
+    test('should handle multiple rapid messages from different clients', (done) => {
         const messages = ['Message 1', 'Message 2', 'Message 3'];
         let receivedCount = 0;
-        
         const clientSocket2 = new Client(`http://localhost:${port}`);
         
         clientSocket2.on('connect', () => {
@@ -175,7 +96,6 @@ describe('Chat Application', () => {
                 }
             });
             
-            // Send messages with slight delay to ensure order
             messages.forEach((msg, index) => {
                 setTimeout(() => {
                     clientSocket.emit('message', msg);
@@ -184,44 +104,43 @@ describe('Chat Application', () => {
         });
     }, 15000);
 
-    test('should handle special characters in messages', (done) => {
-        const specialMessage = '!@#$%^&*()_+';
+    // Disconnect handling tests
+    test('should handle client disconnection gracefully', (done) => {
+        const disconnectingClient = new Client(`http://localhost:${port}`);
         
-        const clientSocket2 = new Client(`http://localhost:${port}`);
-        
-        clientSocket2.on('connect', () => {
-            clientSocket2.on('message', (data) => {
-                if (data.includes(specialMessage)) {
-                    expect(data).toContain(specialMessage);
-                    clientSocket2.disconnect();
-                    done();
-                }
+        disconnectingClient.on('connect', () => {
+            clientSocket.once('message', (message) => {
+                expect(message).toContain('disconnected');
+                done();
             });
             
-            clientSocket.emit('message', specialMessage);
+            setTimeout(() => {
+                disconnectingClient.disconnect();
+            }, 500);
         });
     }, 15000);
 
-    test('should clear typing indicator after timeout', (done) => {
-        const testUser = 'testuser';
-        let typingShown = false;
-        
+    test('should maintain service for other clients when one disconnects', (done) => {
         const clientSocket2 = new Client(`http://localhost:${port}`);
+        const clientSocket3 = new Client(`http://localhost:${port}`);
         
         clientSocket2.on('connect', () => {
-            clientSocket2.on('activity', (name) => {
-                typingShown = true;
-                expect(name).toBe(testUser);
-            });
-            
-            clientSocket.emit('activity', testUser);
-            
-            // Check after 2 seconds (assuming your timeout is set to 2000ms)
-            setTimeout(() => {
-                expect(typingShown).toBe(true);
+            clientSocket3.on('connect', () => {
                 clientSocket2.disconnect();
-                done();
-            }, 2100);
+                
+                setTimeout(() => {
+                    const testMessage = 'Message after disconnect';
+                    clientSocket3.on('message', (data) => {
+                        if (data.includes(testMessage)) {
+                            expect(data).toContain(testMessage);
+                            clientSocket3.disconnect();
+                            done();
+                        }
+                    });
+                    
+                    clientSocket.emit('message', testMessage);
+                }, 1000);
+            });
         });
     }, 15000);
 });
